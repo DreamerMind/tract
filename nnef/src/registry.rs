@@ -171,7 +171,8 @@ impl Registry {
             return Ok(Some(Value::Wire(outlet[0])));
         }
         if let Some(ew) = self.element_wise_ops.iter().find(|ew| ew.0 == invocation.id) {
-            let resolved = ResolvedInvocation { invocation, default_params: &ew.3, dt_from_quant_file: dt };
+            let resolved =
+                ResolvedInvocation { invocation, default_params: &ew.3, dt_from_quant_file: dt };
             return Ok(Some(Value::Wire(
                 (ew.4)(builder, &resolved)
                     .with_context(|| format!("Deserializing op `{}'", invocation.id))?[0],
@@ -184,7 +185,7 @@ impl Registry {
                 invocation.arguments[1].rvalue.resolve(builder, &[])?.to::<OutletId>(builder)?;
             let a_dt = builder.model.outlet_fact(a)?.datum_type;
             let b_dt = builder.model.outlet_fact(b)?.datum_type;
-
+            dbg!("before", a_dt, b_dt);
             // mitigation of nnef "scalar" type mismatch with tract-core more
             // strict types
             if a_dt != b_dt {
@@ -194,6 +195,9 @@ impl Registry {
                     b = builder.wire(tract_core::ops::cast::cast(a_dt), &[b])?[0];
                 };
             }
+            let a_dt = builder.model.outlet_fact(a)?.datum_type;
+            let b_dt = builder.model.outlet_fact(b)?.datum_type;
+            dbg!("after", a_dt, b_dt);
             let inputs = multicast(builder, &[a, b])?;
             let mut wire =
                 builder.wire(tract_core::ops::binary::TypedBinOp(bin.1.clone()), &inputs)?[0];

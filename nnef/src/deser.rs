@@ -206,20 +206,27 @@ impl<'mb> ModelBuilder<'mb> {
         }
         if inputs.iter().all(|o| self.model.outlet_fact(*o).unwrap().konst.is_some()) {
             if op.as_op().is_stateless() {
+                for inp in inputs {
+                    dbg!(self.model.outlet_fact(*inp)?).consistent()?;
+                }
                 let inputs: TVec<Arc<Tensor>> = inputs
                     .iter()
                     .map(|o| self.model.outlet_fact(*o).unwrap().konst.clone().unwrap())
                     .collect();
+                dbg!(&inputs);
                 let outputs = op.eval(inputs)?;
+                dbg!(&outputs);
                 let mut outlets = tvec!();
                 for (ix, o) in outputs.into_iter().enumerate() {
-                    outlets.push(
-                        self.model.wire_node(
-                            format!("{}-{}", name, ix),
-                            tract_core::ops::konst::Const::new(o),
-                            &[],
-                        )?[0],
-                    );
+                    dbg!(&o);
+
+                    let outlet = self.model.wire_node(
+                        format!("{}-{}", name, ix),
+                        tract_core::ops::konst::Const::new(o),
+                        &[],
+                    )?[0];
+                    dbg!(self.model.outlet_fact(outlet));
+                    outlets.push(outlet);
                 }
                 return Ok(outlets);
             }

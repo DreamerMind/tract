@@ -320,6 +320,9 @@ impl<'a> From<&'a TypedFact> for TypedFact {
 
 impl fmt::Debug for TypedFact {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(u) = &self.uniform {
+            write!(fmt, "UNIFORM: {:?} ", u)?;
+        }
         match self.konst {
             Some(ref k) => write!(fmt, "{:?}", k),
             None if self.rank() > 0 => write!(fmt, "{:?},{:?}", self.shape, self.datum_type),

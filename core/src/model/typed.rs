@@ -52,7 +52,10 @@ impl SpecialOps<TypedFact, Box<dyn TypedOp>> for TypedModel {
                     let tensors =
                         input_facts.iter().map(|f| f.konst.clone().unwrap()).collect::<TVec<_>>();
                     if let Ok(outputs) = op.eval(tensors) {
-                        return Ok(outputs.into_iter().map(|t| TypedFact::from(t)).collect());
+                        return Ok(outputs
+                            .into_iter()
+                            .map(|t| dbg!(TypedFact::from(dbg!(t))))
+                            .collect());
                     }
                 }
                 op.output_facts(&*input_facts).context("in output_facts invocation")
@@ -60,6 +63,10 @@ impl SpecialOps<TypedFact, Box<dyn TypedOp>> for TypedModel {
 
             let output_facts = output_facts()
                 .with_context(|| format!("wiring {} ({:?}), determining output_facts", name, op))?;
+            for of in &output_facts {
+                of.consistent()
+                    .with_context(|| format!("wiring {} ({:?}), checking output fact", name, op))?;
+            }
             let id = self.add_node(&name, &op, output_facts)?;
             inputs
                 .iter()
