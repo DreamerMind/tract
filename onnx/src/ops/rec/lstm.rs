@@ -65,7 +65,6 @@ impl Expansion for LSTM {
         "LSTM".into()
     }
 
-
     fn validation(&self) -> Validation {
         Validation::Rounding
     }
@@ -252,7 +251,7 @@ impl LSTM {
 
         // W: onnx interface: [num_directions, 4*hidden_size, input_size]
         // scan interfaces: [4*hidden_size, input_size]
-        target_wire!(w_dir = array::Slice::new(0, dir, dir + 1), inputs[1]);
+        target_wire!(w_dir = array::Slice::new(0, dir, dir + 1, 1), inputs[1]);
         target_wire!(w = AxisOp::Rm(0), w_dir);
         outer_inputs.push(w);
         input_mapping.push(scan::InputMapping::Full { slot: 1 });
@@ -260,7 +259,7 @@ impl LSTM {
 
         // R: onnx interface: [num_directions, 4*hidden_size, hidden_size]
         // scan interfaces: [4*hidden_size, hidden_size]
-        target_wire!(r_dir = array::Slice::new(0, dir, dir + 1), inputs[2]);
+        target_wire!(r_dir = array::Slice::new(0, dir, dir + 1, 1), inputs[2]);
         target_wire!(r = AxisOp::Rm(0), r_dir);
         outer_inputs.push(r);
         input_mapping.push(scan::InputMapping::Full { slot: 2 });
@@ -268,7 +267,7 @@ impl LSTM {
 
         // B: onnx interface: [num_directions, 8*hidden_size]
         let b = if let Some(slot) = self.optional_bias_input {
-            target_wire!(b = array::Slice::new(0, dir, dir + 1), inputs[slot]);
+            target_wire!(b = array::Slice::new(0, dir, dir + 1, 1), inputs[slot]);
             outer_inputs.push(b);
             input_mapping.push(scan::InputMapping::Full { slot });
             let b = body.add_source("b", target.outlet_fact(b)?.clone())?;
@@ -286,7 +285,7 @@ impl LSTM {
         // scan inner: [batch_size, chunk=1, hidden_size]
         // onnx inner: [batch_size, hidden_size]
         let initializer = if let Some(initial_h_input) = self.optional_initial_h_input {
-            target_wire!(h_dir = array::Slice::new(0, dir, dir + 1), inputs[initial_h_input]);
+            target_wire!(h_dir = array::Slice::new(0, dir, dir + 1, 1), inputs[initial_h_input]);
             target_wire!(h = AxisOp::Rm(0), h_dir);
             target_wire!(h_chunk_ = AxisOp::Add(0), h);
             target_wire!(h_chunk = AxisOp::Move(1, 0), h_chunk_);
@@ -304,14 +303,13 @@ impl LSTM {
             )
         };
         input_mapping.push(scan::InputMapping::State { initializer });
-        let h_source = body
-            .add_source(
-                "h_source",
-                x_fact.datum_type.fact(&[b_size.clone(), 1.to_dim(), h_size.clone()]),
-            )?;
+        let h_source = body.add_source(
+            "h_source",
+            x_fact.datum_type.fact(&[b_size.clone(), 1.to_dim(), h_size.clone()]),
+        )?;
 
         let initializer = if let Some(initial_c_input) = self.optional_initial_c_input {
-            target_wire!(c_dir = array::Slice::new(0, dir, dir + 1), inputs[initial_c_input]);
+            target_wire!(c_dir = array::Slice::new(0, dir, dir + 1, 1), inputs[initial_c_input]);
             target_wire!(c = AxisOp::Rm(0), c_dir);
             target_wire!(c_chunk_ = AxisOp::Add(0), c);
             target_wire!(c_chunk = AxisOp::Move(1, 0), c_chunk_);
@@ -329,15 +327,14 @@ impl LSTM {
             )
         };
         input_mapping.push(scan::InputMapping::State { initializer });
-        let c_source = body
-            .add_source(
-                "c_source",
-                x_fact.datum_type.fact(&[b_size.clone(), 1.to_dim(), h_size.clone()]),
-            )?;
+        let c_source = body.add_source(
+            "c_source",
+            x_fact.datum_type.fact(&[b_size.clone(), 1.to_dim(), h_size.clone()]),
+        )?;
 
         // P: onnx [num_directions, 3*hidde_size]
         let p = if let Some(slot) = self.optional_p_input {
-            target_wire!(p = array::Slice::new(0, dir, dir + 1), inputs[slot]);
+            target_wire!(p = array::Slice::new(0, dir, dir + 1, 1), inputs[slot]);
             outer_inputs.push(p);
             input_mapping.push(scan::InputMapping::Full { slot });
             let p = body.add_source("p", target.outlet_fact(p)?.clone())?;
@@ -352,26 +349,26 @@ impl LSTM {
         wire!(Ct_1 = AxisOp::Rm(1), c_source);
         // onnx inner: [batch_size, hidden_size]
 
-        wire!(Wi = array::Slice::new(0, 0.to_dim() * h_size, 1.to_dim() * h_size), W);
-        wire!(Wo = array::Slice::new(0, 1.to_dim() * h_size, 2.to_dim() * h_size), W);
-        wire!(Wf = array::Slice::new(0, 2.to_dim() * h_size, 3.to_dim() * h_size), W);
-        wire!(Wc = array::Slice::new(0, 3.to_dim() * h_size, 4.to_dim() * h_size), W);
+        wire!(Wi = array::Slice::new(0, 0.to_dim() * h_size, 1.to_dim() * h_size, 1), W);
+        wire!(Wo = array::Slice::new(0, 1.to_dim() * h_size, 2.to_dim() * h_size, 1), W);
+        wire!(Wf = array::Slice::new(0, 2.to_dim() * h_size, 3.to_dim() * h_size, 1), W);
+        wire!(Wc = array::Slice::new(0, 3.to_dim() * h_size, 4.to_dim() * h_size, 1), W);
 
-        wire!(Ri = array::Slice::new(0, 0.to_dim() * h_size, 1.to_dim() * h_size), R);
-        wire!(Ro = array::Slice::new(0, 1.to_dim() * h_size, 2.to_dim() * h_size), R);
-        wire!(Rf = array::Slice::new(0, 2.to_dim() * h_size, 3.to_dim() * h_size), R);
-        wire!(Rc = array::Slice::new(0, 3.to_dim() * h_size, 4.to_dim() * h_size), R);
+        wire!(Ri = array::Slice::new(0, 0.to_dim() * h_size, 1.to_dim() * h_size, 1), R);
+        wire!(Ro = array::Slice::new(0, 1.to_dim() * h_size, 2.to_dim() * h_size, 1), R);
+        wire!(Rf = array::Slice::new(0, 2.to_dim() * h_size, 3.to_dim() * h_size, 1), R);
+        wire!(Rc = array::Slice::new(0, 3.to_dim() * h_size, 4.to_dim() * h_size, 1), R);
 
         let biases = if let Some(b) = b {
-            wire!(Wbi = array::Slice::new(1, 0.to_dim() * h_size, 1.to_dim() * h_size), b);
-            wire!(Wbo = array::Slice::new(1, 1.to_dim() * h_size, 2.to_dim() * h_size), b);
-            wire!(Wbf = array::Slice::new(1, 2.to_dim() * h_size, 3.to_dim() * h_size), b);
-            wire!(Wbc = array::Slice::new(1, 3.to_dim() * h_size, 4.to_dim() * h_size), b);
+            wire!(Wbi = array::Slice::new(1, 0.to_dim() * h_size, 1.to_dim() * h_size, 1), b);
+            wire!(Wbo = array::Slice::new(1, 1.to_dim() * h_size, 2.to_dim() * h_size, 1), b);
+            wire!(Wbf = array::Slice::new(1, 2.to_dim() * h_size, 3.to_dim() * h_size, 1), b);
+            wire!(Wbc = array::Slice::new(1, 3.to_dim() * h_size, 4.to_dim() * h_size, 1), b);
 
-            wire!(Rbi = array::Slice::new(1, 4.to_dim() * h_size, 5.to_dim() * h_size), b);
-            wire!(Rbo = array::Slice::new(1, 5.to_dim() * h_size, 6.to_dim() * h_size), b);
-            wire!(Rbf = array::Slice::new(1, 6.to_dim() * h_size, 7.to_dim() * h_size), b);
-            wire!(Rbc = array::Slice::new(1, 7.to_dim() * h_size, 8.to_dim() * h_size), b);
+            wire!(Rbi = array::Slice::new(1, 4.to_dim() * h_size, 5.to_dim() * h_size, 1), b);
+            wire!(Rbo = array::Slice::new(1, 5.to_dim() * h_size, 6.to_dim() * h_size, 1), b);
+            wire!(Rbf = array::Slice::new(1, 6.to_dim() * h_size, 7.to_dim() * h_size, 1), b);
+            wire!(Rbc = array::Slice::new(1, 7.to_dim() * h_size, 8.to_dim() * h_size, 1), b);
 
             wire!(bi = math::add::bin_typed(), Wbi, Rbi);
             wire!(bo = math::add::bin_typed(), Wbo, Rbo);
@@ -384,9 +381,9 @@ impl LSTM {
         };
 
         let peepholes = if let Some(p) = p {
-            wire!(pi = array::Slice::new(1, 0.to_dim() * h_size, 1.to_dim() * h_size), p);
-            wire!(po = array::Slice::new(1, 1.to_dim() * h_size, 2.to_dim() * h_size), p);
-            wire!(pf = array::Slice::new(1, 2.to_dim() * h_size, 3.to_dim() * h_size), p);
+            wire!(pi = array::Slice::new(1, 0.to_dim() * h_size, 1.to_dim() * h_size, 1), p);
+            wire!(po = array::Slice::new(1, 1.to_dim() * h_size, 2.to_dim() * h_size, 1), p);
+            wire!(pf = array::Slice::new(1, 2.to_dim() * h_size, 3.to_dim() * h_size, 1), p);
             Some((pi, po, pf))
         } else {
             None

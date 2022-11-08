@@ -154,9 +154,11 @@ pub fn slice(builder: &mut ModelBuilder, invocation: &ResolvedInvocation) -> Tra
             }
         })
         .collect_vec();
-    izip!(axes, begins, ends)
-        .try_fold(wire, |wire, (axis, start, end)| {
-            builder.wire_as_outlets(tract_core::ops::array::Slice { axis, start, end }, &wire)
+    let strides: TVec<isize> = invocation.named_arg_as(builder, "stride")?;
+    izip!(axes, begins, ends, strides)
+        .try_fold(wire, |wire, (axis, start, end, stride)| {
+            builder
+                .wire_as_outlets(tract_core::ops::array::Slice { axis, start, end, stride }, &wire)
         })
         .map(Value::from)
 }
@@ -650,8 +652,10 @@ pub fn unstack(builder: &mut ModelBuilder, invocation: &ResolvedInvocation) -> T
         .map(|start_int| {
             let start = start_int.to_dim();
             let end = (start_int + 1).to_dim();
-            let sliced_wire = builder
-                .wire_as_outlets(tract_core::ops::array::Slice { axis, start, end }, &wire)?;
+            let sliced_wire = builder.wire_as_outlets(
+                tract_core::ops::array::Slice { axis, start, end, stride: 1 },
+                &wire,
+            )?;
             let squeezed_wire = builder
                 .wire_as_outlets(ops::change_axes::AxisOp::Rm(axis as usize), &sliced_wire)?;
             Ok(squeezed_wire[0])

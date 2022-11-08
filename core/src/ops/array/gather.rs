@@ -107,6 +107,7 @@ impl TypedOp for Gather {
                         axis: self.axis,
                         start: index.clone(),
                         end: index + 1,
+                        stride: 1,
                     },
                     &[wire],
                 )?[0];

@@ -62,7 +62,6 @@ impl Expansion for GRU {
         Validation::Rounding
     }
 
-
     fn rules<'r, 'p: 'r, 's: 'r>(
         &'s self,
         s: &mut Solver<'r>,
@@ -215,7 +214,7 @@ impl GRU {
 
         // W: onnx interface: [num_directions, 3*hidden_size, input_size]
         // scan interfaces: [3*hidden_size, input_size]
-        target_wire!(w_dir = array::Slice::new(0, dir, dir + 1), inputs[1]);
+        target_wire!(w_dir = array::Slice::new(0, dir, dir + 1, 1), inputs[1]);
         target_wire!(w = AxisOp::Rm(0), w_dir);
         outer_inputs.push(w);
         input_mapping.push(scan::InputMapping::Full { slot: 1 });
@@ -223,7 +222,7 @@ impl GRU {
 
         // R: onnx interface: [num_directions, 3*hidden_size, hidden_size]
         // scan interfaces: [3*hidden_size, hidden_size]
-        target_wire!(r_dir = array::Slice::new(0, dir, dir + 1), inputs[2]);
+        target_wire!(r_dir = array::Slice::new(0, dir, dir + 1, 1), inputs[2]);
         target_wire!(r = AxisOp::Rm(0), r_dir);
         outer_inputs.push(r);
         input_mapping.push(scan::InputMapping::Full { slot: 2 });
@@ -231,7 +230,7 @@ impl GRU {
 
         // B: onnx interface: [num_directions, 6*hidden_size]
         let b = if let Some(slot) = self.optional_bias_input {
-            target_wire!(b_dir = array::Slice::new(0, dir, dir + 1), inputs[slot]);
+            target_wire!(b_dir = array::Slice::new(0, dir, dir + 1, 1), inputs[slot]);
             outer_inputs.push(b_dir);
             input_mapping.push(scan::InputMapping::Full { slot });
             let b = body.add_source("b", target.outlet_fact(b_dir)?.clone())?;
@@ -249,7 +248,7 @@ impl GRU {
         // scan inner: [batch_size, chunk=1, hidden_size]
         // onnx inner: [batch_size, hidden_size]
         let initializer = if let Some(initial_h_input) = self.optional_initial_h_input {
-            target_wire!(h_dir = array::Slice::new(0, dir, dir + 1), inputs[initial_h_input]);
+            target_wire!(h_dir = array::Slice::new(0, dir, dir + 1, 1), inputs[initial_h_input]);
             target_wire!(h = AxisOp::Rm(0), h_dir);
             target_wire!(h_chunk_ = AxisOp::Add(0), h);
             target_wire!(h_chunk = AxisOp::Move(1, 0), h_chunk_);
@@ -274,13 +273,13 @@ impl GRU {
 
         wire!(Ht_1 = AxisOp::Rm(1), h_source);
 
-        wire!(Rz = array::Slice::new(0, 0.to_dim() * h_size, 1.to_dim() * h_size), R);
-        wire!(Rr = array::Slice::new(0, 1.to_dim() * h_size, 2.to_dim() * h_size), R);
-        wire!(Rh = array::Slice::new(0, 2.to_dim() * h_size, 3.to_dim() * h_size), R);
+        wire!(Rz = array::Slice::new(0, 0.to_dim() * h_size, 1.to_dim() * h_size, 1), R);
+        wire!(Rr = array::Slice::new(0, 1.to_dim() * h_size, 2.to_dim() * h_size, 1), R);
+        wire!(Rh = array::Slice::new(0, 2.to_dim() * h_size, 3.to_dim() * h_size, 1), R);
 
-        wire!(Wz = array::Slice::new(0, 0.to_dim() * h_size, 1.to_dim() * h_size), W);
-        wire!(Wr = array::Slice::new(0, 1.to_dim() * h_size, 2.to_dim() * h_size), W);
-        wire!(Wh = array::Slice::new(0, 2.to_dim() * h_size, 3.to_dim() * h_size), W);
+        wire!(Wz = array::Slice::new(0, 0.to_dim() * h_size, 1.to_dim() * h_size, 1), W);
+        wire!(Wr = array::Slice::new(0, 1.to_dim() * h_size, 2.to_dim() * h_size, 1), W);
+        wire!(Wh = array::Slice::new(0, 2.to_dim() * h_size, 3.to_dim() * h_size, 1), W);
 
         let matmul_t = matmul::MatMul { axes: MatMulAxes::default().transposing_b() };
 
@@ -290,8 +289,8 @@ impl GRU {
         wire!(zt0 = math::add::bin_typed(), Xt_WzT, Ht_1_RzT);
         let mut zt0 = zt0;
         if let Some(b) = b {
-            wire!(Wbz = array::Slice::new(1, 0.to_dim() * h_size, 1.to_dim() * h_size), b);
-            wire!(Rbz = array::Slice::new(1, 3.to_dim() * h_size, 4.to_dim() * h_size), b);
+            wire!(Wbz = array::Slice::new(1, 0.to_dim() * h_size, 1.to_dim() * h_size, 1), b);
+            wire!(Rbz = array::Slice::new(1, 3.to_dim() * h_size, 4.to_dim() * h_size, 1), b);
             wire!(Wbz_Rbz = math::add::bin_typed(), Wbz, Rbz);
             wire!(zt0_biased = math::add::bin_typed(), zt0, Wbz_Rbz);
             zt0 = zt0_biased
@@ -304,8 +303,8 @@ impl GRU {
         wire!(rt0 = math::add::bin_typed(), Xt_WrT, Ht_1_RrT);
         let mut rt0 = rt0;
         if let Some(b) = b {
-            wire!(Wbr = array::Slice::new(1, 1.to_dim() * h_size, 2.to_dim() * h_size), b);
-            wire!(Rbr = array::Slice::new(1, 4.to_dim() * h_size, 5.to_dim() * h_size), b);
+            wire!(Wbr = array::Slice::new(1, 1.to_dim() * h_size, 2.to_dim() * h_size, 1), b);
+            wire!(Rbr = array::Slice::new(1, 4.to_dim() * h_size, 5.to_dim() * h_size, 1), b);
             wire!(Wbr_Rbr = math::add::bin_typed(), Wbr, Rbr);
             wire!(rt0_biased = math::add::bin_typed(), rt0, Wbr_Rbr);
             rt0 = rt0_biased
@@ -319,7 +318,7 @@ impl GRU {
             // rt (.) (Ht-1*(Rh^T) + Rbh)
             wire!(Ht_1_RhT = matmul_t.clone(), Ht_1, Rh);
             let Ht_1_RhT_Rbh = if let Some(b) = b {
-                wire!(Rbh = array::Slice::new(1, 5.to_dim() * h_size, 6.to_dim() * h_size), b);
+                wire!(Rbh = array::Slice::new(1, 5.to_dim() * h_size, 6.to_dim() * h_size, 1), b);
                 wire!(Ht_1_RhT_Rbh = math::add::bin_typed(), Ht_1_RhT, Rbh);
                 Ht_1_RhT_Rbh
             } else {
@@ -332,7 +331,7 @@ impl GRU {
             wire!(rt_Ht_1 = math::mul::bin_typed(), rt, Ht_1);
             wire!(rt_Ht_1_RhT = matmul_t.clone(), rt_Ht_1, Rh);
             if let Some(b) = b {
-                wire!(Rbh = array::Slice::new(1, 5.to_dim() * h_size, 6.to_dim() * h_size), b);
+                wire!(Rbh = array::Slice::new(1, 5.to_dim() * h_size, 6.to_dim() * h_size, 1), b);
                 wire!(rt_Ht_1_RhT_Rbh = math::add::bin_typed(), rt_Ht_1_RhT, Rbh);
                 rt_Ht_1_RhT_Rbh
             } else {
@@ -342,7 +341,7 @@ impl GRU {
         wire!(ht0 = math::add::bin_typed(), Xt_WhT, rt_Ht_1_RhT_Rbh);
         let mut ht0 = ht0;
         if let Some(b) = b {
-            wire!(Wbh = array::Slice::new(1, 2.to_dim() * h_size, 3.to_dim() * h_size), b);
+            wire!(Wbh = array::Slice::new(1, 2.to_dim() * h_size, 3.to_dim() * h_size, 1), b);
             wire!(ht0_biased = math::add::bin_typed(), ht0, Wbh);
             ht0 = ht0_biased
         }

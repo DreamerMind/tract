@@ -24,7 +24,7 @@ pub fn pull_downsample_over_slice(
     let ds = patch.wire_node(&*down_node.name, new_down, [tap].as_ref())?;
     let new_start = left;
     let new_end = (final_len + left).to_usize()?;
-    let op = ops::array::Slice::new(slice_op.axis, new_start.to_dim(), new_end.to_dim());
+    let op = ops::array::Slice::new(slice_op.axis, new_start.to_dim(), new_end.to_dim(), 1);
     let new_slice = patch.wire_node(&*slice_node.name, op, &*ds)?[0];
     patch.shunt_outside(model, OutletId::new(down_node.id, 0), new_slice)?;
     Ok(Some(patch))
@@ -80,7 +80,7 @@ mod tests {
             let crop = model
                 .wire_node(
                     "crop",
-                    ops::array::Slice::new(0, left.to_dim(), (len - right).to_dim()),
+                    ops::array::Slice::new(0, left.to_dim(), (len - right).to_dim(), 1),
                     &[input],
                 )
                 .unwrap();

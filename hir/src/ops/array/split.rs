@@ -25,7 +25,6 @@ impl Expansion for Split {
         "Split".into()
     }
 
-
     fn rules<'r, 'p: 'r, 's: 'r>(
         &'s self,
         s: &mut Solver<'r>,
@@ -72,7 +71,7 @@ impl Expansion for Split {
             outputs.push(
                 target.wire_node(
                     format!("{}.axis_{}_{}..{}", prefix, axis, current, end),
-                    crate::ops::array::Slice::new(axis, current, end.clone()),
+                    crate::ops::array::Slice::new(axis, current, end.clone(), 1),
                     inputs,
                 )?[0],
             );

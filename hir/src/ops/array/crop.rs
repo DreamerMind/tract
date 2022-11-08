@@ -15,7 +15,6 @@ impl Expansion for Crop {
         "Crop".into()
     }
 
-
     fn rules<'r, 'p: 'r, 's: 'r>(
         &'s self,
         s: &mut Solver<'r>,
@@ -54,6 +53,7 @@ impl Expansion for Crop {
                 self.axis as usize,
                 self.start.to_dim(),
                 len - self.end.to_dim(),
+                1,
             ),
             inputs,
         )

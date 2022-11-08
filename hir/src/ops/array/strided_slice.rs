@@ -161,7 +161,6 @@ impl Expansion for StridedSlice {
         "StridedSlice".into()
     }
 
-
     fn rules<'r, 'p: 'r, 's: 'r>(
         &'s self,
         s: &mut Solver<'r>,
@@ -267,7 +266,7 @@ impl Expansion for StridedSlice {
                 };
                 wire = target.wire_node(
                     format!("{}.slice-axis-{}", prefix, axis),
-                    crate::ops::array::Slice::new(axis, left, right),
+                    crate::ops::array::Slice::new(axis, left, right, 1),
                     [wire].as_ref(),
                 )?[0];
                 if preped.stride != 1 {
@@ -280,7 +279,7 @@ impl Expansion for StridedSlice {
             } else if strides[ix] == 1 {
                 let left = target.wire_node(
                     format!("{}.slice-axis-{}-start", prefix, axis),
-                    crate::ops::array::Slice::new(0, ix, ix + 1),
+                    crate::ops::array::Slice::new(0, ix, ix + 1, 1),
                     &[inputs[1]],
                 )?;
                 let left = target.wire_node(
@@ -290,7 +289,7 @@ impl Expansion for StridedSlice {
                 )?[0];
                 let right = target.wire_node(
                     format!("{}.slice-axis-{}-end", prefix, axis),
-                    crate::ops::array::Slice::new(0, ix, ix + 1),
+                    crate::ops::array::Slice::new(0, ix, ix + 1, 1),
                     &[inputs[2]],
                 )?;
                 let right = target.wire_node(

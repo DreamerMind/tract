@@ -26,7 +26,6 @@ impl Expansion for LstmNonlin {
         "LstmNonlin".into()
     }
 
-
     fn rules<'r, 'p: 'r, 's: 'r>(
         &'s self,
         s: &mut Solver<'r>,
@@ -77,7 +76,7 @@ impl Expansion for LstmNonlin {
             .map(|ix| {
                 Ok(target.wire_node(
                     format!("{}.part-{}", prefix, ix),
-                    array::Slice::new(1, cell_hidden_dim * ix, cell_hidden_dim * (ix + 1)),
+                    array::Slice::new(1, cell_hidden_dim * ix, cell_hidden_dim * (ix + 1), 1),
                     inputs,
                 )?[0])
             })

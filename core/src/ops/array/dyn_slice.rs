@@ -132,6 +132,7 @@ impl TypedOp for DynSlice {
                     axis: self.axis,
                     start: start.cast_to::<TDim>()?.to_scalar::<TDim>()?.clone(),
                     end: end.cast_to::<TDim>()?.to_scalar::<TDim>()?.clone(),
+                    stride: 1,
                 },
             )?));
         }

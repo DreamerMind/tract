@@ -32,7 +32,6 @@ impl Expansion for BlockLSTM {
         "BlockLSTM".into()
     }
 
-
     fn rules<'r, 'p: 'r, 's: 'r>(
         &'s self,
         s: &mut Solver<'r>,
@@ -133,17 +132,17 @@ impl Expansion for BlockLSTM {
         wire!(i_ci_f_o_1 = matmul::mir::MatMul::default(), xh, w);
         wire!(i_ci_f_o = math::add::unary(b.into_arc_tensor()), i_ci_f_o_1);
 
-        wire!(i_1 = array::Slice::new(1, 0, cell_size), i_ci_f_o);
+        wire!(i_1 = array::Slice::new(1, 0, cell_size, 1), i_ci_f_o);
         wire!(i = nn::sigmoid(), i_1);
 
-        wire!(f_1 = array::Slice::new(1, 2 * cell_size, 3 * cell_size), i_ci_f_o);
+        wire!(f_1 = array::Slice::new(1, 2 * cell_size, 3 * cell_size, 1), i_ci_f_o);
         wire!(f_2 = math::add::unary(rctensor2(&[[self.forget_bias]])), f_1);
         wire!(f = nn::sigmoid(), f_2);
 
-        wire!(ci_1 = array::Slice::new(1, cell_size, 2 * cell_size), i_ci_f_o);
+        wire!(ci_1 = array::Slice::new(1, cell_size, 2 * cell_size, 1), i_ci_f_o);
         wire!(ci = math::tanh(), ci_1);
 
-        wire!(o_1 = array::Slice::new(1, 3 * cell_size, 4 * cell_size), i_ci_f_o);
+        wire!(o_1 = array::Slice::new(1, 3 * cell_size, 4 * cell_size, 1), i_ci_f_o);
         wire!(o = nn::sigmoid(), o_1);
 
         wire!(ci_i = math::mul::bin_typed(), ci, i);

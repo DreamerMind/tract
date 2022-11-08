@@ -232,7 +232,7 @@ impl Tensor {
                 for t in tensors {
                     let t = t.borrow();
                     let len = t.shape()[axis];
-                    result.assign_slice_from_resolved(offset..offset + len, t, 0..len, axis);
+                    result.assign_slice_from_resolved(offset..offset + len, t, 0..len, 1, axis);
                     offset += len;
                 }
             }
@@ -595,7 +595,8 @@ impl Tensor {
             range,
             self
         );
-        unsafe { self.assign_slice_from_resolved(range, src, src_range, axis) };
+        // slice is not parametrized here
+        unsafe { self.assign_slice_from_resolved(range, src, src_range, 1, axis) };
         Ok(())
     }
 
@@ -606,9 +607,20 @@ impl Tensor {
         src_range: impl std::ops::RangeBounds<usize>,
         axis: usize,
     ) {
+        return self.assign_slice_with_stride_unchecked(range, src, src_range, 1, axis);
+    }
+
+    pub unsafe fn assign_slice_with_stride_unchecked(
+        &mut self,
+        range: impl std::ops::RangeBounds<usize>,
+        src: &Tensor,
+        src_range: impl std::ops::RangeBounds<usize>,
+        stride: isize,
+        axis: usize,
+    ) {
         let range = self.clip_range_bounds(axis, range);
         let src_range = src.clip_range_bounds(axis, src_range);
-        self.assign_slice_from_resolved(range, src, src_range, axis);
+        self.assign_slice_from_resolved(range, src, src_range, stride, axis);
     }
 
     unsafe fn assign_slice_from_resolved(
@@ -616,6 +628,7 @@ impl Tensor {
         range: std::ops::Range<usize>,
         src: &Tensor,
         src_range: std::ops::Range<usize>,
+        stride: isize,
         axis: usize,
     ) {
         use ndarray::Slice;
@@ -624,6 +637,7 @@ impl Tensor {
             to_range: Range<usize>,
             from: &Tensor,
             from_range: Range<usize>,
+            stride: isize,
             axis: usize,
         ) {
             to.to_array_view_mut_unchecked::<T>()
@@ -631,10 +645,11 @@ impl Tensor {
                 .assign(
                     &from
                         .to_array_view_unchecked::<T>()
-                        .slice_axis(Axis(axis), Slice::from(from_range)),
+                        .slice_axis(Axis(axis), Slice::from(from_range).step_by(stride)),
                 )
         }
-        if self.datum_type().is_copy() && self.shape[..axis].iter().all(|d| *d == 1) {
+        if self.datum_type().is_copy() && self.shape[..axis].iter().all(|d| *d == 1) && stride == 1
+        {
             let stride = self.strides[axis] as usize * self.datum_type().size_of();
             let dst_start = (stride * range.start) as isize;
             let src_start = (stride * src_range.start) as isize;
@@ -651,7 +666,9 @@ impl Tensor {
                 }
             }
         } else {
-            dispatch_datum!(assign_slice_t(self.datum_type())(self, range, src, src_range, axis));
+            dispatch_datum!(assign_slice_t(self.datum_type())(
+                self, range, src, src_range, stride, axis
+            ));
         }
     }
 
@@ -1351,7 +1368,11 @@ impl fmt::Debug for Tensor {
 }
 
 pub fn reinterpret_inner_dim_as_complex(t: &Tensor) -> anyhow::Result<Cow<Tensor>> {
-    anyhow::ensure!(t.shape().last() == Some(&2), "The last dimension in the tensor shape {:?} must be 2", t.shape());
+    anyhow::ensure!(
+        t.shape().last() == Some(&2),
+        "The last dimension in the tensor shape {:?} must be 2",
+        t.shape()
+    );
     let mut new_shape = t.shape().to_vec();
     new_shape.pop();
     macro_rules! n {
@@ -1359,22 +1380,38 @@ pub fn reinterpret_inner_dim_as_complex(t: &Tensor) -> anyhow::Result<Cow<Tensor
             unsafe {
                 let mut dst_tensor = Tensor::uninitialized::<$dest>(&new_shape)?;
                 t.as_slice_unchecked::<$source>()
-                 .chunks(2)
-                 .zip(dst_tensor.as_slice_mut_unchecked::<$dest>())
-                 .for_each(|(s, d)| *d = Complex::new(s[0], s[1]));
+                    .chunks(2)
+                    .zip(dst_tensor.as_slice_mut_unchecked::<$dest>())
+                    .for_each(|(s, d)| *d = Complex::new(s[0], s[1]));
                 Ok(Cow::Owned(dst_tensor))
             }
         };
     }
 
     match t.datum_type() {
-        DatumType::I16 => { n!(i16, Complex<i16>) },
-        DatumType::I32 => { n!(i32, Complex<i32>) },
-        DatumType::I64 => { n!(i64, Complex<i64>) },
-        DatumType::F16 => { n!(f16, Complex<f16>) },
-        DatumType::F32 => { n!(f32, Complex<f32>) },
-        DatumType::F64 => { n!(f64, Complex<f64>) },
-        _ => anyhow::bail!("{:?} cannot be reinterpreted as Complex<{:?}>", t.datum_type(), t.datum_type())
+        DatumType::I16 => {
+            n!(i16, Complex<i16>)
+        }
+        DatumType::I32 => {
+            n!(i32, Complex<i32>)
+        }
+        DatumType::I64 => {
+            n!(i64, Complex<i64>)
+        }
+        DatumType::F16 => {
+            n!(f16, Complex<f16>)
+        }
+        DatumType::F32 => {
+            n!(f32, Complex<f32>)
+        }
+        DatumType::F64 => {
+            n!(f64, Complex<f64>)
+        }
+        _ => anyhow::bail!(
+            "{:?} cannot be reinterpreted as Complex<{:?}>",
+            t.datum_type(),
+            t.datum_type()
+        ),
     }
 }
 
@@ -1562,16 +1599,12 @@ mod tests {
 
     #[test]
     fn test_reinterpret_inner_dim_as_complex() -> anyhow::Result<()> {
-        let input = crate::internal::tensor2(&[
-            [1.0f32, 2.0],
-            [3.0, 4.0],
-            [5.0, 6.0],
-        ]);
+        let input = crate::internal::tensor2(&[[1.0f32, 2.0], [3.0, 4.0], [5.0, 6.0]]);
         let cplx_input = reinterpret_inner_dim_as_complex(&input)?;
         let expected = crate::internal::tensor1(&[
             Complex::new(1.0f32, 2.0),
             Complex::new(3.0, 4.0),
-            Complex::new(5.0, 6.0),    
+            Complex::new(5.0, 6.0),
         ]);
         assert_eq!(&expected, cplx_input.as_ref());
         Ok(())
@@ -1579,16 +1612,13 @@ mod tests {
 
     #[test]
     fn test_reinterpret_inner_dim_as_complex_2() -> anyhow::Result<()> {
-        let input = crate::internal::tensor3(&[
-            [[1i32, 2], [1, 2]],
-            [[3, 4], [3, 4]],
-            [[5, 6], [5, 6]],
-        ]);
+        let input =
+            crate::internal::tensor3(&[[[1i32, 2], [1, 2]], [[3, 4], [3, 4]], [[5, 6], [5, 6]]]);
         let cplx_input = reinterpret_inner_dim_as_complex(&input)?;
         let expected = crate::internal::tensor2(&[
-            [ Complex::new(1i32, 2), Complex::new(1, 2) ],
-            [ Complex::new(3, 4), Complex::new(3, 4) ],
-            [ Complex::new(5, 6), Complex::new(5, 6) ] 
+            [Complex::new(1i32, 2), Complex::new(1, 2)],
+            [Complex::new(3, 4), Complex::new(3, 4)],
+            [Complex::new(5, 6), Complex::new(5, 6)],
         ]);
         assert_eq!(&expected, cplx_input.as_ref());
         Ok(())

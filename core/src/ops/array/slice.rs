@@ -6,6 +6,7 @@ pub struct Slice {
     pub axis: usize,
     pub start: TDim,
     pub end: TDim,
+    pub stride: isize, // can be negative to revert iteration order ...
 }
 
 impl DynHash for Slice {
@@ -15,12 +16,15 @@ impl DynHash for Slice {
 }
 
 impl Slice {
-    pub fn new(axis: usize, start: impl ToDim, end: impl ToDim) -> Slice {
-        Slice { axis, start: start.to_dim(), end: end.to_dim() }
+    pub fn new(axis: usize, start: impl ToDim, end: impl ToDim, stride: isize) -> Slice {
+        Slice { axis, start: start.to_dim(), end: end.to_dim(), stride }
     }
 
     pub fn suffix(&self, name: &str) -> String {
-        format!("{}.axis{}_{}_{}", name, self.axis, self.start, self.end)
+        // show stride
+        let stride_suffix =
+            if self.stride == 1 { String::from("") } else { format!("__stride_{}", self.stride) };
+        format!("{}.axis{}_{}_{}{}", name, self.axis, self.start, self.end, stride_suffix)
     }
 }
 
@@ -30,7 +34,11 @@ impl Op for Slice {
     }
 
     fn info(&self) -> TractResult<Vec<String>> {
-        Ok(vec![format!("axis: {}, {}..{}", self.axis, self.start, self.end)])
+        // show stride
+        let stride_info =
+            if self.stride == 1 { String::from("") } else { format!(", stride: {}", self.stride) };
+
+        Ok(vec![format!("axis: {}, {}..{}{}", self.axis, self.start, self.end, stride_info)])
     }
 
     op_as_typed_op!();
@@ -53,7 +61,7 @@ impl EvalOp for Slice {
         let input = args_1!(inputs);
         let start = self.start.to_usize()?;
         let end = self.end.to_usize()?;
-        eval_slice(&input, self.axis, start, end)
+        eval_slice(&input, self.axis, start, end, self.stride)
     }
 
     fn state(
@@ -75,7 +83,7 @@ impl OpState for Slice {
         let input = args_1!(inputs);
         let start = self.start.eval(&session.resolved_symbols).to_usize()?;
         let end = self.end.eval(&session.resolved_symbols).to_usize()?;
-        eval_slice(&input, self.axis, start, end)
+        eval_slice(&input, self.axis, start, end, self.stride)
     }
 }
 
@@ -84,15 +92,19 @@ fn eval_slice(
     axis: usize,
     start: usize,
     end: usize,
+    stride: isize,
 ) -> TractResult<TVec<Arc<Tensor>>> {
     if end > input.shape()[axis] || start > end {
         bail!("Invalid range {}..{} for slicing {:?} on axis {}", start, end, input, axis);
+    }
+    if stride < 0 || (end as isize) < stride {
+        bail!("Invalid stride {} for slicing {:?} on axis {}", stride, input, axis);
     }
     unsafe {
         let mut shape: TVec<_> = input.shape().into();
         shape[axis] = end - start;
         let mut tensor = Tensor::uninitialized_dt(input.datum_type(), &shape)?;
-        tensor.assign_slice_unchecked(.., input, start..end, axis);
+        tensor.assign_slice_with_stride_unchecked(.., input, start..end, stride, axis);
         Ok(tvec!(tensor.into_arc_tensor()))
     }
 }
@@ -100,7 +112,8 @@ fn eval_slice(
 impl TypedOp for Slice {
     fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>> {
         let mut fact = inputs[0].without_value();
-        fact.shape.set(self.axis, (self.end.clone() - &self.start).to_dim());
+        let n_collected_values = (self.end.clone() - &self.start) / self.stride.abs();
+        fact.shape.set(self.axis, n_collected_values.to_dim());
         Ok(tvec!(fact))
     }
 
@@ -143,7 +156,9 @@ impl TypedOp for Slice {
         node: &TypedNode,
     ) -> TractResult<Option<TypedModelPatch>> {
         let prec = model.node(node.inputs[0].node);
-        if self.start.is_zero() && (self.end == model.outlet_fact(node.inputs[0])?.shape[self.axis])
+        if self.start.is_zero()
+            && (self.end == model.outlet_fact(node.inputs[0])?.shape[self.axis])
+            && self.stride == 1
         {
             return Ok(Some(TypedModelPatch::shunt_one_op(model, node)?.with_context("noop")));
         }
@@ -153,6 +168,7 @@ impl TypedOp for Slice {
             return Ok(None);
         };
         let mut patch = TypedModelPatch::default();
+
         if let Some((wire, no_slice_op)) = prec.op().as_typed().unwrap().slice_output(
             model,
             prec,
@@ -220,8 +236,12 @@ impl TypedOp for Slice {
         mapping: &HashMap<OutletId, OutletId>,
         values: &SymbolValues,
     ) -> TractResult<TVec<OutletId>> {
-        let op =
-            Slice { axis: self.axis, start: self.start.eval(values), end: self.end.eval(values) };
+        let op = Slice {
+            axis: self.axis,
+            start: self.start.eval(values),
+            end: self.end.eval(values),
+            stride: self.stride,
+        };
         let inputs = node.inputs.iter().map(|i| mapping[i]).collect::<TVec<_>>();
         target.wire_node(&node.name, op, &inputs)
     }

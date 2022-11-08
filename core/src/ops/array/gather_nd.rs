@@ -123,7 +123,7 @@ impl TypedOp for GatherNd {
                 for (axis, &i) in indices.cast_to::<i32>()?.as_slice::<i32>()?.iter().enumerate() {
                     wire = patch.wire_node(
                         format!("{}-slice-axis-{}", node.name, axis),
-                        crate::ops::array::Slice::new(axis, i as usize, (i + 1) as usize),
+                        crate::ops::array::Slice::new(axis, i as usize, (i + 1) as usize, 1),
                         &[wire],
                     )?[0];
                 }

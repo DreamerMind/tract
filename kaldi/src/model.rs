@@ -243,6 +243,7 @@ impl Framework<KaldiProtoModel, InferenceModel> for Kaldi {
                         1,
                         line.offset as usize,
                         (line.offset + line.dim) as usize,
+                        1,
                     );
                     let id =
                         model.add_node(name.to_string(), op, tvec!(InferenceFact::default()))?;

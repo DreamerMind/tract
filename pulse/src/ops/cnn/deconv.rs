@@ -79,6 +79,7 @@ fn pulsify(
                 axis,
                 padding.pad_before.clone(),
                 padding.deconvoluted.clone() + &padding.pad_before,
+                1,
             )));
             wire = target.wire_node(format!("{}.padding.{}", node.name, geo_axis), op, &wire)?;
         }

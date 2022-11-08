@@ -21,7 +21,8 @@ fn slice1(
     let axes = node.get_attr_opt_vec("axes")?;
     let begin = node.get_attr_vec("starts")?;
     let end = node.get_attr_vec("ends")?;
-    Ok((expand(Slice1::new(axes, begin, end)), vec![]))
+    let steps = node.get_attr_vec("steps")?;
+    Ok((expand(Slice1::new(axes, begin, end, steps)), vec![]))
 }
 
 #[derive(Debug, Clone, new, Default, Hash)]
@@ -29,6 +30,7 @@ pub struct Slice1 {
     axes: Option<Vec<usize>>,
     starts: Vec<i64>,
     ends: Vec<i64>,
+    steps: Vec<i64>,
 }
 
 impl_dyn_hash!(Slice1);
@@ -37,7 +39,6 @@ impl Expansion for Slice1 {
     fn name(&self) -> Cow<str> {
         "Slice1".into()
     }
-
 
     fn rules<'r, 'p: 'r, 's: 'r>(
         &'s self,
@@ -91,14 +92,15 @@ impl Expansion for Slice1 {
         let mut wire = inputs[0];
         for (ix, (&b, &e)) in self.starts.iter().zip(self.ends.iter()).enumerate() {
             let axis = self.axes.as_ref().map(|axes| axes[ix]).unwrap_or(ix);
+            let step = self.axes.as_ref().map(|step| step[ix]).unwrap_or(ix);
             let dim = &input.shape[axis];
             if let Ok(dim) = dim.to_i64() {
                 let b = (if b >= 0 { b.min(dim) } else { dim + b }) as usize;
                 let e = (if e >= 0 { e.min(dim) } else { dim + e }) as usize;
                 if b > 0 || e < dim as usize {
                     wire = target.wire_node(
-                        format!("{}.axis-{}", prefix, axis),
-                        tract_hir::ops::array::Slice::new(axis, b, e),
+                        format!("{}.axis-{}.step-{}", prefix, axis, step),
+                        tract_hir::ops::array::Slice::new(axis, b, e, step as isize),
                         [wire].as_ref(),
                     )?[0];
                 }

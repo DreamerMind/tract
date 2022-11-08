@@ -58,7 +58,6 @@ impl Expansion for RNN {
         Validation::Rounding
     }
 
-
     fn rules<'r, 'p: 'r, 's: 'r>(
         &'s self,
         s: &mut Solver<'r>,
@@ -213,7 +212,7 @@ impl RNN {
 
         // R: onnx interface: [num_directions, 3*hidden_size, hidden_size]
         // scan interfaces: [3*hidden_size, hidden_size]
-        target_wire!(r_dir = array::Slice::new(0, dir, dir + 1), inputs[2]);
+        target_wire!(r_dir = array::Slice::new(0, dir, dir + 1, 1), inputs[2]);
         target_wire!(r = AxisOp::Rm(0), r_dir);
         outer_inputs.push(r);
         input_mapping.push(scan::InputMapping::Full { slot: 2 });
@@ -221,7 +220,7 @@ impl RNN {
 
         // B: onnx interface: [num_directions, 6*hidden_size]
         let b = if let Some(slot) = self.optional_bias_input {
-            target_wire!(b_dir = array::Slice::new(0, dir, dir + 1), inputs[slot]);
+            target_wire!(b_dir = array::Slice::new(0, dir, dir + 1, 1), inputs[slot]);
             outer_inputs.push(b_dir);
             input_mapping.push(scan::InputMapping::Full { slot });
             let b = body.add_source("b", target.outlet_fact(b_dir)?.clone())?;
@@ -239,7 +238,7 @@ impl RNN {
         // scan inner: [chunk=1, batch_size, hidden_size]
         // onnx inner: [batch_size, hidden_size]
         let initializer = if let Some(initial_h_input) = self.optional_initial_h_input {
-            target_wire!(h_dir = array::Slice::new(0, dir, dir + 1), inputs[initial_h_input]);
+            target_wire!(h_dir = array::Slice::new(0, dir, dir + 1, 1), inputs[initial_h_input]);
             target_wire!(h = AxisOp::Rm(0), h_dir);
             target_wire!(h_chunk = AxisOp::Add(0), h);
             outer_inputs.push(h_chunk);
@@ -256,17 +255,16 @@ impl RNN {
             )
         };
         input_mapping.push(scan::InputMapping::State { initializer });
-        let h_source = body
-            .add_source(
-                "h_source",
-                x_fact.datum_type.fact(&[1.to_dim(), b_size.clone(), h_size.clone()]),
-            )?;
+        let h_source = body.add_source(
+            "h_source",
+            x_fact.datum_type.fact(&[1.to_dim(), b_size.clone(), h_size.clone()]),
+        )?;
 
         wire!(Ht_1 = AxisOp::Rm(0), h_source);
 
         let bias = if let Some(b) = b {
-            wire!(Wbi = array::Slice::new(1, 0.to_dim() * h_size, 1.to_dim() * h_size), b);
-            wire!(Rbi = array::Slice::new(1, 1.to_dim() * h_size, 2.to_dim() * h_size), b);
+            wire!(Wbi = array::Slice::new(1, 0.to_dim() * h_size, 1.to_dim() * h_size, 1), b);
+            wire!(Rbi = array::Slice::new(1, 1.to_dim() * h_size, 2.to_dim() * h_size, 1), b);
             wire!(bi = math::add::bin_typed(), Wbi, Rbi);
             Some(bi)
         } else {
