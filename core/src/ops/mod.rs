@@ -199,21 +199,18 @@ pub trait TypedOp:
         axis: usize,
         start: usize,
         end: usize,
+        stride: isize,
     ) -> TractResult<Option<(OutletId, bool)>> {
         let outlet = OutletId::new(node.id, output_slot);
         let output = model.outlet_fact(outlet)?;
-        if start == 0 && Some(end) == output.shape[axis].to_usize().ok() {
+        dbg!("I AM IN SLICE_OUTPUT from MOD");
+        if start == 0 && Some(end) == output.shape[axis].to_usize().ok() && stride == 1 {
             Ok(Some((patch.tap_model(model, outlet)?, true)))
         } else {
             let wire = patch.tap_model(model, outlet)?;
             let wire = patch.wire_node(
                 &format!("{}-{}.{}", node.name, output_slot, slice_suffix),
-                crate::ops::array::Slice {
-                    start: start.to_dim(),
-                    axis,
-                    end: end.to_dim(),
-                    stride: 1,
-                },
+                crate::ops::array::Slice { start: start.to_dim(), axis, end: end.to_dim(), stride },
                 &[wire],
             )?[0];
             Ok(Some((wire, false)))

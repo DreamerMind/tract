@@ -111,10 +111,12 @@ fn eval_slice(
 
 impl TypedOp for Slice {
     fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>> {
-        let mut fact = inputs[0].without_value();
-        let n_collected_values = (self.end.clone() - &self.start) / self.stride.abs();
-        fact.shape.set(self.axis, n_collected_values.to_dim());
-        Ok(tvec!(fact))
+        let n_collected_values = ((self.end.clone() - &self.start).to_i64()? as f32
+            / self.stride.abs() as f32)
+            .ceil() as i64;
+        let mut new_fact = inputs[0].datum_type.fact(&*inputs[0].shape);
+        new_fact.shape.set(self.axis, n_collected_values.to_dim());
+        Ok(tvec!(new_fact))
     }
 
     fn invariants(
@@ -167,6 +169,7 @@ impl TypedOp for Slice {
         } else {
             return Ok(None);
         };
+        dbg!("HELLLLLLLLLLLLOOOOOOOOOOOOOOOOOOO");
         let mut patch = TypedModelPatch::default();
 
         if let Some((wire, no_slice_op)) = prec.op().as_typed().unwrap().slice_output(
@@ -178,6 +181,7 @@ impl TypedOp for Slice {
             self.axis,
             start,
             end,
+            self.stride,
         )? {
             /*
             dbg!(node);
@@ -186,11 +190,14 @@ impl TypedOp for Slice {
             dbg!(no_slice_op);
             */
             if !no_slice_op {
+                dbg!("I DID no_slice_op IN DECLUTTER");
                 return Ok(None);
             }
             patch.shunt_outside(model, OutletId::new(node.id, 0), wire)?;
+            dbg!("I DID patch.shunt_outside IN DECLUTTER");
             return Ok(Some(patch));
         }
+        dbg!("I AM AT THE END OF DECLUTTER");
         Ok(None)
     }
 
@@ -204,6 +211,7 @@ impl TypedOp for Slice {
         axis: usize,
         start: usize,
         end: usize,
+        stride: isize,
     ) -> TractResult<Option<(OutletId, bool)>> {
         let prec = model.node(node.inputs[0].node);
         if axis != self.axis {
@@ -212,7 +220,17 @@ impl TypedOp for Slice {
                 .op()
                 .as_typed()
                 .unwrap()
-                .slice_output(model, prec, patch, &suffix, node.inputs[0].slot, axis, start, end)?
+                .slice_output(
+                    model,
+                    prec,
+                    patch,
+                    &suffix,
+                    node.inputs[0].slot,
+                    axis,
+                    start,
+                    end,
+                    stride,
+                )?
                 .map(|(w, no_slice_op)| {
                     Ok((
                         patch.wire_node(

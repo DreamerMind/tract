@@ -149,6 +149,7 @@ impl TypedOp for DynSlice {
         axis: usize,
         start: usize,
         end: usize,
+        stride: isize,
     ) -> TractResult<Option<(OutletId, bool)>> {
         let prec = model.node(node.inputs[0].node);
         if axis != self.axis {
@@ -157,7 +158,17 @@ impl TypedOp for DynSlice {
                 .op()
                 .as_typed()
                 .unwrap()
-                .slice_output(model, prec, patch, &suffix, node.inputs[0].slot, axis, start, end)?
+                .slice_output(
+                    model,
+                    prec,
+                    patch,
+                    &suffix,
+                    node.inputs[0].slot,
+                    axis,
+                    start,
+                    end,
+                    stride,
+                )?
                 .map(|(w, no_slice_op)| {
                     Ok((
                         patch.wire_node(

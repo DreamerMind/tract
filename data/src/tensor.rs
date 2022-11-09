@@ -1290,6 +1290,16 @@ impl Tensor {
     }
 
     pub fn slice(&self, axis: usize, start: usize, end: usize) -> anyhow::Result<Tensor> {
+        self.slice_with_stride(axis, start, end, 1)
+    }
+
+    pub fn slice_with_stride(
+        &self,
+        axis: usize,
+        start: usize,
+        end: usize,
+        stride: isize,
+    ) -> anyhow::Result<Tensor> {
         if axis >= self.rank() {
             anyhow::bail!("Can not slice at axis {} tensor {:?}", axis, self);
         }
@@ -1298,13 +1308,15 @@ impl Tensor {
             axis: usize,
             start: usize,
             end: usize,
+            stride: isize,
         ) -> anyhow::Result<Tensor> {
+            use ndarray::Slice;
             Ok(t.to_array_view::<T>()?
-                .slice_axis(ndarray::Axis(axis), (start..end).into())
+                .slice_axis(ndarray::Axis(axis), Slice::from(start..end).step_by(stride))
                 .into_owned()
                 .into_tensor())
         }
-        dispatch_datum!(slice_t(self.datum_type())(self, axis, start, end))
+        dispatch_datum!(slice_t(self.datum_type())(self, axis, start, end, stride))
     }
 
     pub fn view(&self) -> view::TensorView {

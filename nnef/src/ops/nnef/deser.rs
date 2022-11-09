@@ -157,7 +157,7 @@ pub fn slice(builder: &mut ModelBuilder, invocation: &ResolvedInvocation) -> Tra
     let strides: TVec<isize> = invocation.named_arg_as(builder, "stride")?;
     izip!(axes, begins, ends, strides)
         .try_fold(wire, |wire, (axis, start, end, stride)| {
-            builder
+            let mut w = builder
                 .wire_as_outlets(tract_core::ops::array::Slice { axis, start, end, stride }, &wire)
         })
         .map(Value::from)

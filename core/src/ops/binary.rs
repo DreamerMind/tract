@@ -225,6 +225,7 @@ impl TypedOp for TypedBinOp {
         axis: usize,
         start: usize,
         end: usize,
+        stride: isize,
     ) -> TractResult<Option<(OutletId, bool)>> {
         let a_input = node.inputs[0];
         let b_input = node.inputs[1];
@@ -242,6 +243,7 @@ impl TypedOp for TypedBinOp {
                 axis,
                 start,
                 end,
+                stride,
             )?;
             let b_sliced = b_prec_node.op.slice_output(
                 model,
@@ -252,6 +254,7 @@ impl TypedOp for TypedBinOp {
                 axis,
                 start,
                 end,
+                stride,
             )?;
             if let (Some((a, _)), Some((b, _))) = (a_sliced, b_sliced) {
                 let name = format!("{}-slice-{}-{}..{}", node.name, axis, start, end);
@@ -427,6 +430,7 @@ impl TypedOp for UnaryOp {
         axis: usize,
         start: usize,
         end: usize,
+        stride: isize,
     ) -> TractResult<Option<(OutletId, bool)>> {
         let b = model.outlet_fact(node.inputs[0])?;
         debug_assert_eq!(self.a.rank(), b.rank());
@@ -440,6 +444,7 @@ impl TypedOp for UnaryOp {
             axis,
             start,
             end,
+            stride,
         )?;
         let wire = if let Some(w) = wire { w.0 } else { return Ok(None) };
         let a = if self.a.shape()[axis] != 1 {

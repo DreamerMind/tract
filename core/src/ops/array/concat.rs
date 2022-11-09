@@ -155,6 +155,7 @@ impl TypedOp for TypedConcat {
         axis: usize,
         start: usize,
         end: usize,
+        stride: isize,
     ) -> TractResult<Option<(OutletId, bool)>> {
         let inputs = model.node_input_facts(node.id)?;
         if self.axis == axis {
@@ -187,6 +188,7 @@ impl TypedOp for TypedConcat {
                                 axis,
                                 start - offsets[ix],
                                 end - offsets[ix],
+                                stride,
                             )? {
                                 return Ok(Some((wire, true)));
                             } else {

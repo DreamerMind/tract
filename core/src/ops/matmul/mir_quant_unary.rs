@@ -162,12 +162,13 @@ impl TypedOp for QMatMulUnary {
         axis: usize,
         start: usize,
         end: usize,
+        stride: isize,
     ) -> TractResult<Option<(OutletId, bool)>> {
         if axis == self.axes.c_m {
             let a_split_axis = self.axes.a_m;
-            let a = self.a.slice(a_split_axis, start, end)?.into_arc_tensor();
+            let a = self.a.slice_with_stride(a_split_axis, start, end, stride)?.into_arc_tensor();
             let bias = if let Some(bias) = self.bias.as_ref().filter(|b| b.rank() == 1) {
-                Some(bias.slice(0, start, end)?.into_arc_tensor())
+                Some(bias.slice_with_stride(0, start, end, stride)?.into_arc_tensor())
             } else {
                 self.bias.clone()
             };
